@@ -1,8 +1,6 @@
----
-title:  "Vendor Performance Analysis R and Tableau" 
-description: "Vendor Performance Analysis: R & Tableau" 
-author: "Fatima Zehra" 
----
+
+# "Vendor Performance Analysis R and Tableau" 
+## description: "Vendor Performance Analysis: R & Tableau" 
 
 ## Table of Contents
 - <a href="#overview">Overview</a>
@@ -266,9 +264,8 @@ These actions can support sustainable profitability while reducing supply-chain 
 
 ---
 <h2><a class="anchor" id="author--contact"></a>Author & Contact</h2>
-
-**Fatima Zehra**  
-Data Analyst  
-📧 Email:  
-🔗 [LinkedIn]
+## Author - Fatima Zehra
+- 🔗 GitHub: https://github.com/Fatima-Zehra-DA
+- 🔗 LinkedIn: https://linkedin.com/in/fatima-zehra-308b85358/
+- 📧 Email: fatimazehra2305@gmail.com
 
