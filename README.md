@@ -1,6 +1,4 @@
-
-# "Vendor Performance Analysis R and Tableau" 
-## description: "Vendor Performance Analysis: R & Tableau" 
+# Vendor Performance Analysis R and Tableau
 
 ## Table of Contents
 - <a href="#overview">Overview</a>
@@ -17,7 +15,7 @@
 - <a href="#conclusion">Conclusion & Recommendations</a>
 - <a href="#author--contact">Author & Contact</a> 
 
-
+# Tableau Dashboard
 ![Dashboard](Dashboard/Dashboard.png)
 
 ---
@@ -105,6 +103,7 @@ Raw CSV Files
 
 ---
 <h2><a class="anchor" id="data-cleaning--preparation"></a>Data Cleaning & Preparation</h2>
+
 - Removed transactions with:
   - Gross Profit ≤ 0
   - Profit Margin ≤ 0
@@ -133,6 +132,7 @@ Raw CSV Files
 
 ---
 <h2><a class="anchor" id="business-questions"></a> Business Questions</h2>
+
 - Which vendors contribute most to purchasing?
 - How concentrated is vendor spending?
 - Which vendors generate the highest profit?
@@ -191,7 +191,7 @@ Vendor_Performance_Analysis/
 ├── run_project.R
 ├── Vendor_Performance_Analysis_R_Tableau.Rproj
 └── README.md
-
+```
 ## Purchase Distribution
 
 ![Purchase Distribution](outputs/plots/purchase_distribution.png)
@@ -264,7 +264,8 @@ These actions can support sustainable profitability while reducing supply-chain 
 
 ---
 <h2><a class="anchor" id="author--contact"></a>Author & Contact</h2>
-## Author - Fatima Zehra
+
+- 👩🏻 Author: Fatima Zehra
 - 🔗 GitHub: https://github.com/Fatima-Zehra-DA
 - 🔗 LinkedIn: https://linkedin.com/in/fatima-zehra-308b85358/
 - 📧 Email: fatimazehra2305@gmail.com
