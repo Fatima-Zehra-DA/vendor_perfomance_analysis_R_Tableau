@@ -1,0 +1,711 @@
+---
+title: "Vendor Performance Analysis"
+author: "Fatima Zehra"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+## 1. Introduction
+This project is part of the Google Data Analytics Professional Certificate.  
+The goal is to analysis is to evaluate vendor performance using transactional purchase, sales, pricing, and invoice data in order to support strategic decision-making.
+
+
+This analysis aims to evaluate vendor performance and procurement concentration using purchase and sales data, with a focus on identifying key vendors that drive the majority of spend and assessing diversification risk.
+
+```{r config path, echo=FALSE}
+source(here::here("config", "paths.R"))
+```
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+library(skimr)
+library(tidyverse)
+library(scales)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(forcats)
+library(tidyr)
+library(scales)
+library(ggrepel)
+
+library(patchwork)
+```
+## 2. Data Import and Audit
+The analysis uses a cleaned and aggregated vendor-level dataset prepared during the data processing stage.
+
+```{r import data, echo = FALSE}
+#vendor_sales <- read_csv(paste0(processed_data_path, "vendor_sales_summary.csv"))
+
+vendor_sales <- read_csv("../data/processed/vendor_sales_summary.csv")
+
+```
+
+The dataset contains 10,692 vendor-level records and 18 variables, including purchase quantities, sales dollars, gross profit, and operational metrics. The data was validated for structure, completeness, and suitability for downstream analysis.
+
+
+
+
+## 3. Data Quality and Sanity Checks
+
+Data quality checks identified missing values in sales- and margin-related fields. Missing values were reviewed based on their business context, while records failing the defined business rules were excluded from the final analytical dataset.
+
+
+```{r cleaning , include=FALSE}
+
+# Missing values check
+vendor_sales %>%
+  summarise(across(everything(), ~ sum(is.na(.))))
+
+# Basic distributions
+summary(vendor_sales$ProfitMargin )
+summary(vendor_sales$stockTurnover)
+
+# Negative or impossible values
+vendor_sales<-vendor_sales %>%
+  filter(
+    ProfitMargin < -1 |
+      ProfitMargin > 1 |
+      stockTurnover < 0
+  )
+
+```
+```{r echo=FALSE}
+
+
+cat("Rows:", nrow(vendor_sales), "\n")
+cat("Columns:", ncol(vendor_sales))
+
+
+```
+
+
+
+### 3.1 Data Filtering | Business Rules
+
+To ensure the analysis focuses on valid and profitable vendor activity, records were filtered using the following business rules:
+
+- Gross Profit > 0
+- Profit Margin > 0
+- Total Sales Quantity > 0
+
+```{r Removing outliers ,include=FALSE}
+df <- vendor_sales %>% 
+  filter(
+    GrossProfit > 0,
+    ProfitMargin > 0,
+    TotalSalesQuantity > 0
+  )
+
+```
+```{r echo=FALSE}
+
+
+cat("Rows:", nrow(df), "\n")
+cat("Columns:", ncol(df))
+
+
+```
+
+
+## 4. Exploratory Data Analysis
+
+Exploratory Data Analysis (EDA) was conducted to understand overall purchasing and sales patterns. The purpose of this section is to highlight key trends, not to document every intermediate plot created during exploration.
+
+### 4.1 Correlation 
+
+```{r echo=FALSE }
+
+#----------------------------------------------
+#  Plots : Correlation Heatmap
+#----------------------------------------------
+
+
+
+  
+# Step 1: Select only numeric columns
+ 
+
+numeric_cols_2 <- df %>%
+  select(where(is.numeric))
+  
+# Step 2: Compute correlation matrix
+cor_matrix <- cor(
+  numeric_cols_2,
+  use = "complete.obs",
+  method = "pearson"
+)
+
+# Step 3: Convert matrix to long format (for ggplot)
+
+
+cor_long <- as.data.frame(cor_matrix) %>%
+  mutate(Var1 = rownames(.)) %>%
+  pivot_longer(
+    cols = -Var1,
+    names_to = "Var2",
+    values_to = "Correlation"
+  )
+
+# Step 4: Plot correlation heatmap
+
+
+
+# heatmap 2 final
+
+ggplot(cor_long, aes(x = Var1, y = Var2, fill = Correlation)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(
+    aes(label = sprintf("%.2f", Correlation)),
+    size = 3
+  ) +
+  scale_fill_gradient2(
+    low = "#4575b4",   # blue  
+    mid = "white",
+    high = "#d73027", # red  
+    midpoint = 0,
+    limits = c(-1, 1),
+    name = "Correlation"
+  ) +
+  labs(
+    title = "Correlation Heatmap",
+    x = NULL,
+    y = NULL
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid = element_blank()
+  )
+
+```
+
+
+### Insight:
+
+**Purchase Price vs. Total Sales Dollars & Gross Profit:** Weak correlation
+(-0.012 and -0.016), indicating that price variations do not significantly
+impact sales revenue or profit.
+
+**Total Purchase Quantity vs. Total Sales Quantity:** Strong positive correlation (0.999), indicating that vendors with higher purchase quantities also tend to have higher sales quantities.
+
+**Profit Margin vs. Total Sales Price:** Weak negative correlation (-0.179), indicating a slight inverse relationship between sales price and profit margin in the analyzed data.
+
+**Stock Turnover vs. Gross Profit & Profit Margin:** Weak negative
+correlation (-0.038 & -0.055), indicating that faster stock turnover does not
+necessarily equate to higher profitability.
+
+
+
+### 4.2 Distribution of Purchase Spend 
+
+```{r , echo = FALSE}
+ggplot(df, aes(x = TotalPurchaseDollars)) +
+  geom_histogram(
+    bins = 40,
+    fill = "#2C7FB8",
+    alpha = 0.8
+  ) +
+  scale_x_continuous(labels = label_number(scale = 1e-6, suffix = "M")) +
+  labs(
+    title = "Distribution of Total Purchase Spend Across Vendors",
+    x = "Total Purchase Dollars (in Millions)",
+    y = "Number of Vendors"
+  ) +
+  theme_minimal()
+
+
+  
+```
+
+### Insight:
+The distribution of total purchase spend is highly right-skewed, indicating that a small number of vendors account for a disproportionately large share of total purchases. This suggests vendor concentration and highlights the importance of identifying key contributors to overall procurement spend.
+
+### 4.3 Sales vs Profit Relationship
+
+```{r top 10 vendor and products, echo = FALSE}
+ggplot(df, aes(x = TotalSalesDollars, y = GrossProfit)) +
+  geom_point(alpha = 0.7, color = "#1F78B4") +
+  scale_x_continuous(labels = label_number(scale = 1e-6, suffix = "M")) +
+  scale_y_continuous(labels = label_number(scale = 1e-6, suffix = "M")) +
+  labs(
+    title = "Sales vs Gross Profit by Vendor",
+    x = "Total Sales Dollars (in Millions)",
+    y = "Gross Profit (in Millions)"
+  ) +
+  theme_minimal()
+
+```
+
+### Insight:
+There is a general positive relationship between total sales and gross profit; however, several vendors exhibit high sales with comparatively lower profit levels. This indicates variability in vendor profitability and suggests that high sales volume does not always translate into strong margins.
+
+### 4.4 Brands for Promotional or Pricing Adjustment
+
+```{r, echo=FALSE}
+
+brand_performance <- df %>%
+  group_by(Description) %>% 
+  summarise(TotalSalesDollars = sum(TotalSalesDollars),
+            ProfitMargin = mean(ProfitMargin),
+            .group = "drop")
+ 
+
+low_sales_threshold <- quantile (
+  brand_performance$TotalSalesDollars,
+  prob = 0.15,
+  na.rm = TRUE
+)
+
+high_margin_threshold <- quantile(
+  brand_performance$ProfitMargin ,
+  prob = 0.85,
+  na.rm = TRUE
+)
+#------------------------------------------------------------------
+# Question 1 : filter Brands with low sales but high profit margin
+#------------------------------------------------------------------
+
+target_brands <- brand_performance %>% 
+  filter(
+    TotalSalesDollars <= low_sales_threshold,
+    ProfitMargin >= high_margin_threshold 
+  ) %>%
+  arrange(TotalSalesDollars)
+
+print("Brands with Low Sales but High Profit Margins:")
+target_brands
+
+# Scatter plot to identify the brand 
+brand_performance <- brand_performance %>% 
+  filter(TotalSalesDollars < 10000)
+  
+#-----------------------------------------------------------------
+
+ggplot() +
+  # All brands
+  geom_point(
+    data = brand_performance,
+    aes(
+      x = TotalSalesDollars,
+      y = ProfitMargin,
+      color = "All Brands"
+    ),
+    alpha = 0.2
+  ) +
+  
+  # Target brands
+  geom_point(
+    data = target_brands,
+    aes(
+      x = TotalSalesDollars,
+      y = ProfitMargin,
+      color = "Target Brands"
+    ),
+    size = 2
+  ) +
+  
+  # Threshold lines
+  geom_hline(
+    yintercept = high_margin_threshold,
+    linetype = "dashed",
+    color = "black"
+  ) +
+  geom_vline(
+    xintercept = low_sales_threshold,
+    linetype = "dashed",
+    color = "black"
+  ) +
+  
+  # Axis formatting
+    scale_y_continuous(
+      labels = function(x) paste0(x, "%"),
+      limits = c(0, 100)
+    ) +
+  #scale_y_continuous(
+   # labels = percent_format(accuracy = 1)
+ # ) +
+  
+  # Manual legend colors
+  scale_color_manual(
+    values = c(
+      "All Brands" = "blue",
+      "Target Brands" = "red",
+      "High Margin Threshold" = "black",
+      "Low Sales Threshold" = "black"
+    )
+  ) +
+  
+  # Labels
+  labs(
+    title = "Brands for Promotional or Pricing Adjustments",
+    x = "Total Sales ($)",
+    y = "Profit Margin (%)",
+    color = "Legend"
+  ) +
+  
+  theme_minimal()
+```
+
+### Insight
+
+198 brands exhibit lower sales but higher profit margins, which could
+benefit from targeted marketing, promotions, or price optimizations to
+increase volume without compromising profitability.
+
+
+
+
+
+### 4.5 Top 10 Brands by Gross Profit
+```{r , echo = FALSE}
+
+brand_profit <- df %>%
+  group_by(Description) %>%
+  summarise(
+    GrossProfit = sum(GrossProfit)
+  ) %>%
+  arrange(desc(GrossProfit)) %>%
+  slice_head(n = 10)
+
+ggplot(
+    brand_profit,
+    aes(
+        x = reorder(Description , GrossProfit),
+        y = GrossProfit
+    )
+) +
+geom_col(fill="#33A02C") +
+coord_flip() +
+ scale_y_continuous(
+    breaks = seq(0, 2.5e6, by = 5e5),
+    labels = label_number(scale = 1e-6, suffix = "M")
+)+
+labs(
+    title="Top 10 Brands by Gross Profit",
+    x="Brand",
+    y="Gross Profit ($)"
+) +
+theme_minimal()
+
+
+```
+
+
+### Insight:
+
+The top 10 brands contribute a substantial share of total gross profit, with Jack Daniels No 7 Black generating the highest profit, followed by Grey Goose Vodka and Tito's Handmade Vodka. This indicates that profitability is concentrated among a small number of premium brands, making them strategically important for revenue growth and inventory planning.
+
+
+
+
+
+
+## 5.  Vendor Contribution Analysis
+
+### Objective
+
+The objective of this section is to identify vendors that contribute the most to total purchase dollars and to evaluate the concentration of procurement spend. This analysis supports strategic sourcing decisions, vendor prioritization, and risk assessment related to supplier dependency.
+
+### 5.1 Vendor Purchase Contribution
+
+```{r , echo = FALSE}
+
+
+
+#-----------Plot----------
+
+vendor_contribution <- df %>%
+  group_by(VendorName) %>%
+  summarise(
+    TotalPurchaseDollars = sum(TotalPurchaseDollars, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(TotalPurchaseDollars)) %>%
+  mutate(
+    Purchase_Contribution_Pct = TotalPurchaseDollars / sum(TotalPurchaseDollars),
+    Cumulative_Contribution_Pct = cumsum(Purchase_Contribution_Pct)
+  )
+
+vendor_contribution %>%
+  slice_head(n = 10) %>%
+  ggplot(aes(x = reorder(VendorName, TotalPurchaseDollars),
+             y = TotalPurchaseDollars)) +
+  geom_col(fill = "#1F78B4") +
+  coord_flip() +
+  scale_y_continuous(labels = label_number(scale = 1e-6, suffix = "M")) +
+  labs(
+    title = "Top 10 Vendors by Total Purchase Dollars",
+    x = "Vendor",
+    y = "Total Purchase Dollars (in Millions)"
+  ) +
+  theme_minimal()
+
+ggsave(
+ "../outputs/plots/Top 10 Vendors by Purchase Dollars.png",
+width = 12,
+height = 8,
+dpi = 300
+)
+```
+
+### Insight
+
+Purchase spend is highly concentrated among a small number of vendors, with DIAGEO NORTH AMERICA INC alone accounting for the largest share of total purchase dollars by a wide margin.
+
+The top 3–4 vendors contribute disproportionately compared to the remaining vendors, indicating strong dependence on key suppliers.
+
+This concentration suggests that pricing changes, supply disruptions, or contract renegotiations with these vendors could materially impact overall procurement costs.
+
+### 5.2 Pareto Analysis of Vendor Contribution
+
+The Pareto analysis evaluates whether procurement spend follows the 80/20 principle—where approximately 80% of total purchase dollars are contributed by around 20% of vendors.
+
+```{r , echo = FALSE}
+
+ vendor_performance <- df %>% 
+      group_by(VendorName) %>% 
+      summarise(
+        TotalPurchaseDollars = sum(TotalPurchaseDollars , na.rm = TRUE),
+        GrossProfit = sum(GrossProfit , na.rm = TRUE),
+        TotalSalesDollars = sum(TotalSalesDollars , na.rm = TRUE),
+        .groups = "drop"
+        ) 
+  
+vendor_performance <- vendor_performance %>% 
+  mutate(
+    purchase_contribution_percent = TotalPurchaseDollars / sum(vendor_performance$TotalPurchaseDollars) * 100
+    ,
+    
+    TotalPurchaseDollarsfmt = label_number(
+      scale_cut = cut_si(unit=""),
+      accuracy = 0.1
+    )
+    (TotalPurchaseDollars),
+    GrossProfitfmt = label_number(
+      scale_cut = cut_si(unit=""),
+      accuracy = 0.1
+    )
+    (GrossProfit),
+    TotalSalesDollarsfmt = label_number(
+      scale_cut = cut_si(unit=""),
+      accuracy = 0.1
+    )(TotalSalesDollars)
+    
+  ) %>% 
+  arrange(-purchase_contribution_percent) %>% 
+  mutate(
+    cumulative_contribution = cumsum(purchase_contribution_percent)
+  )
+
+
+top_vendors_df <- vendor_performance%>%
+  select(VendorName,purchase_contribution_percent,
+         cumulative_contribution ) %>% 
+  slice_head(n = 10)
+
+
+#------Plot-------------
+
+ggplot(top_vendors_df, aes(x = reorder(VendorName, -purchase_contribution_percent))) +
+  
+  # Bars: Purchase Contribution %
+  geom_col(aes(y = purchase_contribution_percent), fill = "#4C72B0") +
+  
+  # Line: Cumulative %
+  geom_line(
+    aes(y = cumulative_contribution * max(purchase_contribution_percent) / 100, group = 1),
+    color = "red",
+    size = 1.2
+  ) +
+  geom_point(
+    aes(y = cumulative_contribution * max(purchase_contribution_percent) / 100),
+    color = "red",
+    size = 3
+  ) +
+  
+  # Dual axis (correct transformation)
+  scale_y_continuous(
+    name = "Purchase Contribution (%)",
+    sec.axis = sec_axis(
+      ~ . * 100 / max(top_vendors_df$purchase_contribution_percent),
+      name = "Cumulative Contribution (%)",
+      labels = percent_format(scale = 1)
+    )
+  ) +
+  
+  labs(
+    title = "Pareto Chart: Vendor Contribution to Total Purchase",
+    x = "Vendor"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 90, hjust = 1)
+  )
+```
+
+
+### Insight
+
+The Pareto analysis clearly shows that a small subset of vendors accounts for the majority of total purchase spend, consistent with the 80/20 principle.
+
+Approximately 20–25% of vendors contribute close to 75–80% of total purchase dollars, confirming a highly concentrated procurement structure.
+
+While vendor concentration can improve negotiation leverage and operational efficiency, it also introduces supplier risk, reinforcing the need for diversified sourcing or contingency planning.
+
+
+### 5.1 Methodology
+Vendor-level purchase contribution was calculated as the proportion of each vendor’s total purchase dollars relative to the overall purchase volume. Vendors were ranked in descending order, and the top contributors were selected for analysis.
+
+### 5.2 Key Visualization
+
+A bar chart displaying the top 10 vendors by purchase contribution was used to illustrate concentration effects and relative vendor importance.
+
+```{r Vendors contribution , echo = FALSE}
+
+ vendor_performance <- df %>% 
+      group_by(VendorName) %>% 
+      summarise(
+        TotalPurchaseDollars = sum(TotalPurchaseDollars , na.rm = TRUE),
+        GrossProfit = sum(GrossProfit , na.rm = TRUE),
+        TotalSalesDollars = sum(TotalSalesDollars , na.rm = TRUE),
+        .groups = "drop"
+        ) 
+  
+vendor_performance <- vendor_performance %>% 
+  mutate(
+    Purchase_contribution_pct = TotalPurchaseDollars / sum(vendor_performance$TotalPurchaseDollars) * 100
+    ,
+    
+    TotalPurchaseDollarsfmt = label_number(
+      scale_cut = cut_si(unit=""),
+      accuracy = 0.1
+    )
+    (TotalPurchaseDollars),
+    GrossProfitfmt = label_number(
+      scale_cut = cut_si(unit=""),
+      accuracy = 0.1
+    )
+    (GrossProfit),
+    TotalSalesDollarsfmt = label_number(
+      scale_cut = cut_si(unit=""),
+      accuracy = 0.1
+    )(TotalSalesDollars)
+    
+  ) %>% 
+  arrange(-Purchase_contribution_pct) %>% 
+  mutate(
+    Cumulative_contribution_pct = cumsum(Purchase_contribution_pct)
+  )
+
+
+# Display Top 10 Vendors
+top_vendors_purchase_contribution <- vendor_performance %>% 
+  select(
+    VendorName,
+    TotalPurchaseDollarsfmt,
+    GrossProfitfmt,
+    TotalSalesDollarsfmt,
+    Purchase_contribution_pct,
+    Cumulative_contribution_pct) %>% 
+  slice_head(n =10) %>% 
+  arrange(-Purchase_contribution_pct)
+  
+# Top vendors total contribution -- for checking contribution only 
+top_vendors_purchase_contribution %>%
+  summarise(
+    total = sum(Purchase_contribution_pct)
+    )
+
+# Col Plot for Purchase Contribution in percentage
+
+ggplot(top_vendors_purchase_contribution,
+       aes(x = reorder(VendorName, Purchase_contribution_pct),
+           y = Purchase_contribution_pct)) +
+  geom_col(fill = "#41B6C4") +
+  geom_text(
+    aes(label = paste0(round(Purchase_contribution_pct, 1), "%")),
+    hjust = -0.1,
+    size = 3
+  ) +
+  coord_flip() +
+  
+  scale_y_continuous( 
+    labels  = label_percent( scale = 1) )+
+  
+  labs(
+    title = "Top 10 Vendors – Purchase Contribution (%)",
+    x = "Vendor",
+    y = "Purchase Contribution (%)"
+  ) +
+  theme_minimal(base_size = 12)
+```
+
+### Insight
+
+The leading vendor contributes approximately 16% of total purchase dollars, while the remaining top vendors individually contribute between 3% and 8%.
+
+Beyond the top vendor, contribution declines gradually, forming a long-tail distribution among vendors.
+
+This pattern highlights an opportunity to optimize sourcing strategy, either by strengthening partnerships with high-value vendors or redistributing spend to reduce dependency risk.
+
+
+
+
+### 5.3 Strategic Implications
+
+Key business implications derived from the vendor contribution analysis include:
+
+High dependency on a limited number of vendors increases supply chain and pricing risk.
+
+Strategic vendors should be prioritized for contract negotiation, performance monitoring, and relationship management.
+
+Lower-contributing vendors may present opportunities for consolidation or alternative sourcing strategies.
+
+
+
+## 6. Conclusion 
+
+The analysis reveals a high concentration of purchasing spend among a small group of vendors, highlighting potential supplier dependency and procurement risk.
+
+Based on these findings, the following actions are recommended:
+
+- **Monitor dependency on top vendors** to identify and mitigate supply and procurement risks.
+- **Evaluate profitability alignment** among high-contribution vendors to ensure purchasing volume supports profitable sales.
+- **Explore vendor diversification** among mid-tier vendors to reduce reliance on a small number of suppliers.
+
+## 7 Recommendations
+
+- Re-evaluate pricing for low-sales, high-margin brands to boost sales
+volume without sacrificing profitability.
+- Diversify vendor partnerships to reduce dependency on a few
+suppliers and mitigate supply chain risks.
+- Leverage bulk purchasing advantages to maintain competitive pricing
+while optimizing inventory management.
+- Optimize slow-moving inventory by adjusting purchase quantities,
+launching clearance sales, or revising storage strategies.
+- Enhance marketing and distribution strategies for low-performing
+vendors to drive higher sales volumes without compromising profit
+margins.
+- By implementing these recommendations, the company can achieve
+sustainable profitability, mitigate risks, and enhance overall
+operational efficiency.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,13 @@
+# R / RStudio
+.Rhistory
+.RData
+.Rproj.user/
+.RDataTmp*
+
+# Raw data
+data/
+
+# Temporary files
+*.tmp
+
+
