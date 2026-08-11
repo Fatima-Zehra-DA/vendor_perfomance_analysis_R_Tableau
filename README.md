@@ -20,8 +20,7 @@ author: "Fatima Zehra"
 - <a href="#author--contact">Author & Contact</a> 
 
 
-![Purchase Distribution](outputs/plots/histogram_distribution.png)
-![Correlation](outputs/plots/correlation_heatmap.png) 
+![Dashboard](Dashboard/Dashboard.png)
 
 ---
 <h2><a class="anchor" id="overview"></a>Project Overview</h2>
@@ -158,6 +157,9 @@ Raw CSV Files
 ---
 <h2><a class="anchor" id="project-structure"></a>Project Structure</h2>
 
+## 📁 Project Structure
+
+```text
 Vendor_Performance_Analysis/
 │
 ├── data/
@@ -168,16 +170,16 @@ Vendor_Performance_Analysis/
 │   ├── 01_load_data.R
 │   ├── 02_data_cleaning.R
 │   ├── 03_build_vendor_sales_summary_table.R
-│   ├── 04_eda.R
-│   └── utils.R
+│   └── 04_eda.R
+│
+├── utils/
 │
 ├── output/
 │   ├── tables/
-│   └── plots/
-│
-├── reports/
-│   ├── report.Rmd
-│   └── report.html
+│   ├── plots/
+│   └── reports/
+│       ├── report.Rmd
+│       └── report.html
 │
 ├── docs/
 │   ├── business_problem.md
@@ -189,10 +191,8 @@ Vendor_Performance_Analysis/
 │   └── paths.R
 │
 ├── run_project.R
-├── Vender_Performance_Analysis_R_Tableau.Rproj
+├── Vendor_Performance_Analysis_R_Tableau.Rproj
 └── README.md
-
-
 
 ## Purchase Distribution
 
